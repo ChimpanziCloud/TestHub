@@ -182,10 +182,11 @@ local function makeTopBtn(text, posX, callback)
 end
 
 makeTopBtn("✕", -36, function()
-    tween(Main, {Size = UDim2.new(0, MainW, 0, 0)}, 0.3)
-    task.wait(0.35)
+    Main.Visible = false
+    MainStroke.Thickness = 0
+    task.wait(0.05)
     ScreenGui:Destroy()
-    for _, c in Connections do c:Disconnect() end
+    for _, c in Connections do pcall(function() c:Disconnect() end) end
 end)
 
 makeTopBtn("—", -70, function()
@@ -370,6 +371,102 @@ local function addToggle(page, name, default, callback)
     return card
 end
 
+local function addSlider(page, name, min, max, default, callback)
+    local value = default
+
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, 0, 0, IsMobile and 52 or 46)
+    card.BackgroundColor3 = Colors.card
+    card.BorderSizePixel = 0
+    card.Parent = page
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 6)
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Text = "  " .. name
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 11
+    lbl.TextColor3 = Colors.text
+    lbl.BackgroundTransparency = 1
+    lbl.Size = UDim2.new(0.6, 0, 0, 20)
+    lbl.Position = UDim2.new(0, 0, 0, 2)
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = card
+
+    local valLabel = Instance.new("TextLabel")
+    valLabel.Font = Enum.Font.GothamBold
+    valLabel.TextSize = 11
+    valLabel.TextColor3 = Colors.accent2
+    valLabel.BackgroundTransparency = 1
+    valLabel.Size = UDim2.new(0.35, 0, 0, 20)
+    valLabel.Position = UDim2.new(0.6, 0, 0, 2)
+    valLabel.TextXAlignment = Enum.TextXAlignment.Right
+    valLabel.Text = tostring(math.floor(value))
+    valLabel.Parent = card
+
+    local track = Instance.new("Frame")
+    track.Size = UDim2.new(1, -20, 0, 6)
+    track.Position = UDim2.new(0, 10, 0, 28)
+    track.BackgroundColor3 = Colors.toggle_off
+    track.BorderSizePixel = 0
+    track.Parent = card
+    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+
+    local fill = Instance.new("Frame")
+    local pct = (default - min) / (max - min)
+    fill.Size = UDim2.new(pct, 0, 1, 0)
+    fill.BackgroundColor3 = Colors.accent
+    fill.BorderSizePixel = 0
+    fill.Parent = track
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = UDim2.new(pct, -7, 0.5, -7)
+    knob.BackgroundColor3 = Colors.text
+    knob.BorderSizePixel = 0
+    knob.ZIndex = 2
+    knob.Parent = track
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
+    local hitbox = Instance.new("TextButton")
+    hitbox.Text = ""
+    hitbox.Size = UDim2.new(1, 0, 0, 20)
+    hitbox.Position = UDim2.new(0, 0, 0, 18)
+    hitbox.BackgroundTransparency = 1
+    hitbox.Parent = card
+
+    local sliding = false
+    local function updateSlider(inputPos)
+        local trackAbsPos = track.AbsolutePosition.X
+        local trackAbsSize = track.AbsoluteSize.X
+        local relX = math.clamp((inputPos.X - trackAbsPos) / trackAbsSize, 0, 1)
+        value = math.floor(min + (max - min) * relX)
+        valLabel.Text = tostring(value)
+        fill.Size = UDim2.new(relX, 0, 1, 0)
+        knob.Position = UDim2.new(relX, -7, 0.5, -7)
+        if callback then callback(value) end
+    end
+
+    hitbox.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            sliding = true
+            updateSlider(input.Position)
+        end
+    end)
+    hitbox.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            sliding = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            updateSlider(input.Position)
+        end
+    end)
+
+    return {card = card, getValue = function() return value end}
+end
+
 local function addButton(page, name, callback)
     local btn = Instance.new("TextButton")
     btn.Text = name
@@ -489,14 +586,41 @@ do
     local pg = Pages["Combat"]
     addLabel(pg, "Movement Exploits (Anticheat Triggers)")
 
+    local defaultWalkSpeed = 16
+    local defaultJumpPower = 50
+    local speedValue = 100
+    local jumpValue = 150
+
+    pcall(function()
+        local h = getHumanoid()
+        if h then
+            defaultWalkSpeed = h.WalkSpeed
+            defaultJumpPower = h.JumpPower
+        end
+    end)
+
     addToggle(pg, "Speed Hack (WalkSpeed)", false, function(on)
         local h = getHumanoid()
-        if h then h.WalkSpeed = on and 100 or 16 end
+        if h then h.WalkSpeed = on and speedValue or defaultWalkSpeed end
+    end)
+    addSlider(pg, "Speed Value", 16, 500, 100, function(v)
+        speedValue = v
+        if Toggles["Speed Hack (WalkSpeed)"] then
+            local h = getHumanoid()
+            if h then h.WalkSpeed = v end
+        end
     end)
 
     addToggle(pg, "Jump Power", false, function(on)
         local h = getHumanoid()
-        if h then h.JumpPower = on and 150 or 50 end
+        if h then h.JumpPower = on and jumpValue or defaultJumpPower end
+    end)
+    addSlider(pg, "Jump Value", 50, 500, 150, function(v)
+        jumpValue = v
+        if Toggles["Jump Power"] then
+            local h = getHumanoid()
+            if h then h.JumpPower = v end
+        end
     end)
 
     addToggle(pg, "No Clip", false, function(on)
@@ -583,18 +707,15 @@ do
     addToggle(pg, "Auto Attack (Click)", false, function(on)
         disconnect("autoclick")
         if on then
-            Connections["autoclick"] = RunService.Heartbeat:Connect(function()
-                pcall(function()
-                    local tool = LP.Character and LP.Character:FindFirstChildOfClass("Tool")
-                    if tool and tool:FindFirstChild("RemoteFunctionShoot") then
-                        -- generic remote fire for testing
-                    end
-                    -- Simulate mouse click via VirtualInputManager if available
-                    if getgenv and not getgenv().__ac_click_warned then
-                        getgenv().__ac_click_warned = true
-                    end
-                    mouse1click()
-                end)
+            Connections["autoclick"] = task.spawn(function()
+                while Toggles["Auto Attack (Click)"] do
+                    pcall(function()
+                        if mouse1click then
+                            mouse1click()
+                        end
+                    end)
+                    task.wait(0.15)
+                end
             end)
         end
     end)
@@ -654,6 +775,130 @@ do
                 end
             end)
         end
+    end)
+
+    addLabel(pg, "Auto Farm")
+
+    addToggle(pg, "Auto Farm (Nearest Mob)", false, function(on)
+        disconnect("autofarm")
+        if on then
+            Connections["autofarm"] = task.spawn(function()
+                while Toggles["Auto Farm (Nearest Mob)"] do
+                    pcall(function()
+                        local hrp = getHRP()
+                        if not hrp then return end
+                        local nearest, nearDist = nil, math.huge
+                        for _, npc in Workspace:GetChildren() do
+                            if npc:FindFirstChild("Humanoid") and npc:FindFirstChild("HumanoidRootPart")
+                                and not Players:GetPlayerFromCharacter(npc)
+                                and npc.Humanoid.Health > 0 then
+                                local dist = (npc.HumanoidRootPart.Position - hrp.Position).Magnitude
+                                if dist < nearDist then
+                                    nearest = npc
+                                    nearDist = dist
+                                end
+                            end
+                        end
+                        if nearest then
+                            hrp.CFrame = nearest.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+                            task.wait(0.1)
+                            if mouse1click then mouse1click() end
+                        end
+                    end)
+                    task.wait(0.2)
+                end
+            end)
+        end
+    end)
+
+    addToggle(pg, "Auto Farm (TP Kill)", false, function(on)
+        disconnect("autofarm_tp")
+        if on then
+            Connections["autofarm_tp"] = task.spawn(function()
+                while Toggles["Auto Farm (TP Kill)"] do
+                    pcall(function()
+                        local hrp = getHRP()
+                        if not hrp then return end
+                        for _, npc in Workspace:GetChildren() do
+                            if npc:FindFirstChild("Humanoid") and npc:FindFirstChild("HumanoidRootPart")
+                                and not Players:GetPlayerFromCharacter(npc)
+                                and npc.Humanoid.Health > 0 then
+                                hrp.CFrame = npc.HumanoidRootPart.CFrame * CFrame.new(0, 0, 2)
+                                task.wait(0.1)
+                                if mouse1click then mouse1click() end
+                                task.wait(0.1)
+                                if mouse1click then mouse1click() end
+                                break
+                            end
+                        end
+                    end)
+                    task.wait(0.3)
+                end
+            end)
+        end
+    end)
+
+    addLabel(pg, "Fruit Finder")
+
+    addToggle(pg, "Fruit ESP", false, function(on)
+        for _, v in Workspace:GetDescendants() do
+            if v:IsA("Highlight") and v.Name == "TestHubFruitESP" then v:Destroy() end
+        end
+        if on then
+            Connections["fruit_esp"] = task.spawn(function()
+                while Toggles["Fruit ESP"] do
+                    for _, v in Workspace:GetDescendants() do
+                        if v:IsA("Highlight") and v.Name == "TestHubFruitESP" then v:Destroy() end
+                    end
+                    for _, v in Workspace:GetDescendants() do
+                        pcall(function()
+                            if v:IsA("Tool") and v.Name:find("Fruit") or (v:IsA("Model") and v.Name:find("Fruit")) then
+                                local part = v:IsA("BasePart") and v or v:FindFirstChildWhichIsA("BasePart")
+                                if part and not v:FindFirstChild("TestHubFruitESP") then
+                                    local h = Instance.new("Highlight")
+                                    h.Name = "TestHubFruitESP"
+                                    h.FillColor = Color3.fromRGB(255, 215, 0)
+                                    h.FillTransparency = 0.3
+                                    h.OutlineColor = Color3.fromRGB(255, 255, 100)
+                                    h.Adornee = v
+                                    h.Parent = v
+                                end
+                            end
+                        end)
+                    end
+                    task.wait(2)
+                end
+            end)
+        else
+            disconnect("fruit_esp")
+        end
+    end)
+
+    addButton(pg, "🍎 TP to Nearest Fruit", function()
+        pcall(function()
+            local hrp = getHRP()
+            if not hrp then return end
+            local nearest, nearDist = nil, math.huge
+            for _, v in Workspace:GetDescendants() do
+                pcall(function()
+                    if (v:IsA("Tool") or v:IsA("Model")) and v.Name:find("Fruit") then
+                        local part = v:IsA("BasePart") and v or v:FindFirstChildWhichIsA("BasePart")
+                        if part then
+                            local dist = (part.Position - hrp.Position).Magnitude
+                            if dist < nearDist then
+                                nearest = part
+                                nearDist = dist
+                            end
+                        end
+                    end
+                end)
+            end
+            if nearest then
+                hrp.CFrame = nearest.CFrame * CFrame.new(0, 3, 0)
+            else
+                warn("[TestHub] No fruits found in workspace")
+            end
+        end)
     end)
 end
 
